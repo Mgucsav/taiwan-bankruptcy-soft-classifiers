@@ -1,0 +1,8 @@
+# Scientific-computing packages pinned to the versions recorded in artifacts/environment.json
+# by GitHub Actions run 36425263045 (Ubuntu 24.04, CPython 3.12.14).
+# Used by CI: python -m pip install -e ".[dev]" -c constraints-ci.txt
+numpy==2.5.3
+pandas==3.0.6
+scipy==1.18.1
+scikit-learn==1.9.1
+joblib==1.6.0

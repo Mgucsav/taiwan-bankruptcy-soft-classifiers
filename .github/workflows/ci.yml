@@ -16,23 +16,23 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Set up Python 3.12.14
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12.14"
           cache: pip
 
       - name: Install project
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -e ".[dev]" -c constraints-ci.txt
           python -m pip check
 
       - name: Record environment
@@ -53,6 +53,9 @@ jobs:
         run: |
           python scripts/run_baselines.py
           python scripts/run_soft_experiments.py
+
+      - name: Verify canonical results are reproduced
+        run: python scripts/verify_reproducibility.py
 
       - name: Upload reproducibility evidence
         if: always()

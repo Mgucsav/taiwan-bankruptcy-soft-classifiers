@@ -106,14 +106,19 @@ implemented yet.
 
 ### Continuous integration
 
-`.github/workflows/ci.yml` runs on every push to `main` on Linux with Python 3.12. It:
+`.github/workflows/ci.yml` runs on every push to `main` on Ubuntu 24.04 with CPython 3.12.14.
+It:
 
-1. Installs the project and records the Python and package versions in
-   `artifacts/environment.json`.
+1. Installs the project with the scientific stack pinned by `constraints-ci.txt` (numpy 2.5.3,
+   pandas 3.0.6, scipy 1.18.1, scikit-learn 1.9.1, joblib 1.6.0), runs `pip check` and
+   records the versions in `artifacts/environment.json`.
 2. Downloads the official UCI data.
 3. Runs the data preparation, the tests, `ruff check` and `ruff format --check`.
 4. Runs both experiment scripts.
-5. Uploads the data-quality and result files as a workflow artefact.
+5. Runs `scripts/verify_reproducibility.py`, which compares the new results with the canonical
+   files in `reports/pilot_results/` (exact for text/integers, rtol = atol = 1e-12 for floats,
+   runtimes ignored) and fails the workflow on any difference.
+6. Uploads the data-quality and result files as a workflow artefact, even when a step fails.
 
 ## 5. Class imbalance warning
 
@@ -162,6 +167,7 @@ taiwan-bankruptcy-soft-classifiers/
 │   ├── prepare_data.py
 │   ├── run_baselines.py
 │   ├── run_soft_experiments.py
+│   ├── verify_reproducibility.py  # CI gate: artifacts/ vs reports/pilot_results/
 │   └── write_environment.py    # -> artifacts/environment.json
 ├── src/taiwan_soft_classifiers/
 │   ├── config.py               # paths, RANDOM_STATE = 42, data contracts
@@ -170,6 +176,7 @@ taiwan-bankruptcy-soft-classifiers/
 │   ├── splitting.py            # fixed stratified folds
 │   ├── baselines.py            # classical baselines
 │   ├── evaluation.py           # confusion-matrix counts
+│   ├── reproducibility.py      # canonical-result comparison and SHA-256 manifest
 │   └── soft_classifiers.py     # FPFS-kNN, IFPIFS-HC, PFS-kNN
 └── tests/
 ```
@@ -254,6 +261,15 @@ cases are produced by perturbing copies of the real data.
 - The source ZIP's SHA-256 is recorded in `artifacts/data_quality.json`; rerun with
   `--expected-sha256` to require the same file.
 - All paths are relative to the repository (`pathlib.Path`); no credentials are used.
+- Frozen environment: Ubuntu 24.04, CPython 3.12.14 and the scientific packages pinned in
+  `constraints-ci.txt`. Locally, the same stack can be installed with
+  `python -m pip install -e ".[dev]" -c constraints-ci.txt`.
+- Frozen results: the canonical pilot results in `reports/pilot_results/` are listed with
+  their SHA-256 digests in `reports/pilot_results/SHA256SUMS.txt` (verified by the tests,
+  checkable with `sha256sum -c SHA256SUMS.txt`). Every CI run must reproduce them
+  (`scripts/verify_reproducibility.py`).
+- Scope: independent formula fixtures only; no MATLAB run. The results are a fixed-parameter,
+  single-dataset, five-fold descriptive pilot.
 - Note: `data_quality.json` contains the download timestamp, so it changes if the data are
   downloaded again even when the data are identical.
 

@@ -1,0 +1,3 @@
+# Canonical pilot results are hashed in reports/pilot_results/SHA256SUMS.txt: keep their bytes
+# identical on every platform (no CRLF conversion on Windows checkouts).
+reports/pilot_results/* text eol=lf

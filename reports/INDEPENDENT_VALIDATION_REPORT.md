@@ -48,14 +48,30 @@ Canonical run: GitHub Actions run `36422198527` (commit `b7f7a96`), all steps pa
 | scikit-learn | 1.9.1 |
 | joblib | 1.6.0 |
 
-From the next run on, `scripts/write_environment.py` records these versions programmatically in
-`artifacts/environment.json`, which is uploaded with the other CI artefacts. Dependency versions
-are lower-bounded in `pyproject.toml`, not pinned.
+Run `36425263045` confirmed the same versions in `artifacts/environment.json`, which
+`scripts/write_environment.py` fills from the running environment.
+
+**Frozen environment.** CI now runs on `ubuntu-24.04` with CPython `3.12.14`. It installs
+numpy, pandas, scipy, scikit-learn and joblib at exactly the versions above from
+`constraints-ci.txt` (`pip install -e ".[dev]" -c constraints-ci.txt`). `pyproject.toml` keeps
+lower bounds only; pytest and Ruff are not pinned because they do not produce numerical
+results.
+
+**Canonical-results gate.** After the experiments, `scripts/verify_reproducibility.py` compares
+every file in `reports/pilot_results/` with the newly produced file in `artifacts/`.
+
+- Text and integer columns must match exactly.
+- Floating-point columns must match within rtol = atol = 1e-12.
+- JSON files are compared as parsed objects.
+- Runtime columns (`elapsed_seconds*`) are ignored.
+
+Any difference fails the workflow. The SHA-256 digests of the six canonical files are frozen in
+`reports/pilot_results/SHA256SUMS.txt` and checked by the test suite.
 
 Random forest threshold-dependent results differed between scikit-learn 1.8.0 (the environment
 of the first independent pilot) and 1.9.1 by a small margin that is nevertheless larger than
 rounding error. The final pilot therefore uses the results of the CI environment of run
-36422198527. The baseline tables below and `reports/pilot_results/baseline_*.csv` are taken
+36422198527, which is now pinned (see below). The baseline tables below and `reports/pilot_results/baseline_*.csv` are taken
 from that run. The soft-classifier results of that run were identical to the first pilot.
 
 ## 4. Protocol
@@ -172,6 +188,6 @@ materially on the chosen metric.
    MATLAB fixture.
 2. Decide whether the study stays a fixed-parameter pilot or adds training-fold-only parameter
    selection (nested within the training folds).
-3. Consider pinning dependency versions (e.g. a constraints file) so that CI results cannot
-   drift with new library releases.
-4. Freeze the result files and their hashes for the abstract.
+
+Completed: the CI environment is pinned (`constraints-ci.txt`, Ubuntu 24.04, CPython 3.12.14),
+and the canonical result files are frozen by SHA-256 and protected by the CI comparison gate.
