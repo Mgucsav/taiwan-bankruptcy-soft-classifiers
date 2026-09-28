@@ -172,7 +172,9 @@ the paper. `tests/test_soft_verification.py` contains a regression case in which
 disagree (mode of indices → class 0, label majority → class 1) and checks that Python returns the
 label majority. The component definitions (Definitions 35-36), the refusal degree
 π = 1 − (μ + ν) and the Minkowski distance with the 1/3 factor (Proposition 7) agree between the
-paper, the MATLAB code and the Python implementation.
+paper, the MATLAB code and the Python implementation. On the real data the two rules disagree for
+about 3.4 % of the firms and change the PFS-kNN results materially, because bankrupt firms are
+concentrated near the top of the UCI file (see `reports/INDEPENDENT_REAL_DATA_CHECK.md`).
 
 **IFPIFS-HC undefined correlations.** As in `IFPIFSHC.m` (`ifwP(isnan(ifwP))=0`), a feature
 whose Pearson correlation is undefined (constant training column) receives zero μ and ν weights,

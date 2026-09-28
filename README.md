@@ -101,6 +101,12 @@ Reference pilot outputs are stored in `reports/pilot_results/`, with a narrative
 five folds. They do not establish that any method is statistically superior, and they are not
 optimised or final estimates.
 
+An end-to-end check on the real data, written independently of the project code
+(`scripts/independent_real_data_check.py`), re-derives the data facts, recomputes the three soft
+classifiers line by line from the MATLAB sources and the PFS-kNN paper, and compares every
+prediction and metric with the canonical results. It also measures what the public PFS-kNN
+MATLAB decision line would change. See `reports/INDEPENDENT_REAL_DATA_CHECK.md`.
+
 FPFS-AC (Memiş, Enginoğlu & Erkan, 2022) and IFPIFSC (Memiş et al., 2023) have not been
 implemented yet.
 
@@ -185,6 +191,7 @@ taiwan-bankruptcy-soft-classifiers/
 │   ├── download_data.py
 │   ├── prepare_data.py
 │   ├── diagnose_baseline_determinism.py  # CI: three same-runner baseline repeats
+│   ├── independent_real_data_check.py    # manual: independent real-data re-computation
 │   ├── run_baselines.py
 │   ├── run_soft_experiments.py
 │   ├── verify_reproducibility.py  # CI gate: artifacts/ vs reports/pilot_results/
