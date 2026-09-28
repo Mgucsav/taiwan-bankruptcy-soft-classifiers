@@ -2,22 +2,34 @@
 
 from __future__ import annotations
 
+import argparse
 import json
+from pathlib import Path
 
 from taiwan_soft_classifiers import config
 from taiwan_soft_classifiers.baselines import evaluate_baselines, summarize_fold_results
 from taiwan_soft_classifiers.data import load_clean_data, write_csv
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=config.ARTIFACTS_DIR,
+        help="directory for the result files (default: artifacts/)",
+    )
+    output_dir = parser.parse_args(argv).output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     clean = load_clean_data()
     assignments = __import__("pandas").read_csv(config.FOLD_ASSIGNMENTS_PATH)
     fold_results = evaluate_baselines(clean, assignments)
     summary = summarize_fold_results(fold_results)
 
-    fold_path = config.ARTIFACTS_DIR / "baseline_fold_results.csv"
-    summary_path = config.ARTIFACTS_DIR / "baseline_summary.csv"
-    manifest_path = config.ARTIFACTS_DIR / "baseline_protocol.json"
+    fold_path = output_dir / "baseline_fold_results.csv"
+    summary_path = output_dir / "baseline_summary.csv"
+    manifest_path = output_dir / "baseline_protocol.json"
     write_csv(fold_results, fold_path)
     write_csv(summary, summary_path)
     manifest_path.write_text(

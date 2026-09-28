@@ -51,28 +51,57 @@ Canonical run: GitHub Actions run `36422198527` (commit `b7f7a96`), all steps pa
 Run `36425263045` confirmed the same versions in `artifacts/environment.json`, which
 `scripts/write_environment.py` fills from the running environment.
 
-**Frozen environment.** CI now runs on `ubuntu-24.04` with CPython `3.12.14`. It installs
-numpy, pandas, scipy, scikit-learn and joblib at exactly the versions above from
+**Pinned environment.** CI runs on `ubuntu-24.04` with CPython `3.12.14`. It installs numpy,
+pandas, scipy, scikit-learn, joblib and threadpoolctl at fixed versions from
 `constraints-ci.txt` (`pip install -e ".[dev]" -c constraints-ci.txt`). `pyproject.toml` keeps
 lower bounds only; pytest and Ruff are not pinned because they do not produce numerical
 results.
 
-**Canonical-results gate.** After the experiments, `scripts/verify_reproducibility.py` compares
-every file in `reports/pilot_results/` with the newly produced file in `artifacts/`.
+The workflow also sets `PYTHONHASHSEED=42` and restricts OpenBLAS, OpenMP, MKL and numexpr to
+one thread. `OPENBLAS_CORETYPE` is not forced. Instead, `artifacts/environment.json` records:
 
-- Text and integer columns must match exactly.
-- Floating-point columns must match within rtol = atol = 1e-12.
-- JSON files are compared as parsed objects.
-- Runtime columns (`elapsed_seconds*`) are ignored.
+- the CPU (`lscpu` summary, `platform.machine()`);
+- `numpy.show_config()`;
+- `threadpoolctl.threadpool_info()`, including the OpenBLAS core type in use;
+- the thread environment variables.
 
-Any difference fails the workflow. The SHA-256 digests of the six canonical files are frozen in
+**Cross-runner observation.** Runs `36425263045` (Azure westus3) and `36431187367` (Azure
+westcentralus) used identical package versions and runner images. Their predicted labels,
+confusion counts and threshold-based metrics were identical for every model. The soft-classifier
+results and the SVM, random forest and dummy results were identical in every column. Only the
+Logistic-balanced ROC-AUC and PR-AUC differed, by at most 7.5e-4 per fold and 2.6e-4 in the
+means. Logistic regression probability-score rankings showed cross-runner numerical variation
+below 1e-3 while predicted labels, confusion counts and threshold-based metrics remained
+identical.
+
+**Canonical-results gate (reporting-level reproducibility).** After the experiments,
+`scripts/verify_reproducibility.py` compares every file in `reports/pilot_results/` with the
+newly produced file in `artifacts/`. The results are claimed to be numerically stable within the
+declared tolerance, not bit-for-bit identical on every CPU.
+
+| Fields | Rule |
+|---|---|
+| Model name, fold, sample and class counts, predicted positives, TP/TN/FP/FN, other text or integer fields | exact equality |
+| Balanced accuracy, precision, recall, F1, MCC; every soft-classifier metric; ROC-AUC and PR-AUC of all models except Logistic-balanced | rtol = atol = 1e-12 |
+| Logistic-balanced ROC-AUC and PR-AUC, and their fold mean/std | rtol = 0, atol = 1e-3 |
+| Runtime (`elapsed_seconds*`) | ignored |
+| JSON protocol files | equal as parsed objects |
+
+Any violation fails the workflow. Because of the 1e-3 tolerance, the Logistic-balanced ROC-AUC
+and PR-AUC are reported to two decimals. The workflow additionally runs the baseline experiment
+three times on the same runner (`scripts/diagnose_baseline_determinism.py`) and records in
+`artifacts/baseline_determinism.json` whether the Logistic AUCs are bit-for-bit identical
+within one runner.
+
+The canonical files are unchanged. Their SHA-256 digests are frozen in
 `reports/pilot_results/SHA256SUMS.txt` and checked by the test suite.
 
 Random forest threshold-dependent results differed between scikit-learn 1.8.0 (the environment
 of the first independent pilot) and 1.9.1 by a small margin that is nevertheless larger than
 rounding error. The final pilot therefore uses the results of the CI environment of run
-36422198527, which is now pinned (see below). The baseline tables below and `reports/pilot_results/baseline_*.csv` are taken
-from that run. The soft-classifier results of that run were identical to the first pilot.
+36422198527, whose package versions are now pinned (see above). The baseline tables below and
+`reports/pilot_results/baseline_*.csv` are taken from that run. The soft-classifier results of
+that run were identical to the first pilot and have stayed identical in every later CI run.
 
 ## 4. Protocol
 
@@ -100,9 +129,12 @@ labels, not continuous scores, so no ROC-AUC or PR-AUC is reported for them.
 | Model | Balanced accuracy | Positive precision | Positive recall | Positive F1 | MCC | ROC-AUC | PR-AUC |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | Dummy-prior | 0.500 ± 0.000 | 0.000 ± 0.000 | 0.000 ± 0.000 | 0.000 ± 0.000 | 0.000 ± 0.000 | 0.500 ± 0.000 | 0.032 ± 0.000 |
-| Logistic-balanced | 0.836 ± 0.029 | 0.174 ± 0.012 | 0.800 ± 0.069 | 0.285 ± 0.016 | 0.334 ± 0.022 | 0.893 ± 0.037 | 0.352 ± 0.074 |
+| Logistic-balanced | 0.836 ± 0.029 | 0.174 ± 0.012 | 0.800 ± 0.069 | 0.285 ± 0.016 | 0.334 ± 0.022 | 0.89 ± 0.04ᵃ | 0.35 ± 0.07ᵃ |
 | SVM-RBF-balanced | 0.787 ± 0.039 | 0.185 ± 0.006 | 0.673 ± 0.090 | 0.290 ± 0.012 | 0.315 ± 0.026 | 0.914 ± 0.016 | 0.327 ± 0.036 |
 | RandomForest-balanced | 0.571 ± 0.030 | 0.611 ± 0.110 | 0.145 ± 0.061 | 0.227 ± 0.070 | 0.281 ± 0.052 | 0.942 ± 0.020 | 0.430 ± 0.046 |
+
+ᵃ Two decimals: these values are reproducible within an absolute tolerance of 1e-3 across CI
+runners (Section 3). All other entries are reproduced to 1e-12.
 
 Threshold-free ranking (ROC-AUC, PR-AUC) and default-threshold classification answer different
 questions. In this pilot the random forest ranks bankrupt firms well but predicts few positives

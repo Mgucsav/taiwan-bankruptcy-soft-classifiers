@@ -23,9 +23,39 @@ CANONICAL_FILES: tuple[str, ...] = (
     "soft_classifier_summary.csv",
     "soft_classifier_protocol.json",
 )
+KEY_COLUMNS: tuple[str, ...] = ("model", "fold")
+
+# ---------------------------------------------------------------------------
+# Tolerance policy (reporting-level reproducibility)
+# ---------------------------------------------------------------------------
+# Tier 1 - exact: text and integer columns (model, fold, n_test, positive_test,
+#   predicted_positive, true/false positives/negatives).
+# Tier 2 - rtol = atol = 1e-12: every floating-point metric, including all soft-classifier
+#   metrics, all threshold-based baseline metrics and the ROC-AUC/PR-AUC of every model
+#   except Logistic-balanced.
+# Tier 3 - rtol = 0, atol = 1e-3: only the ROC-AUC and PR-AUC of Logistic-balanced and the
+#   mean/std derived from them. Logistic regression probability-score rankings showed
+#   cross-runner numerical variation below 1e-3 while predicted labels, confusion counts and
+#   threshold-based metrics remained identical (GitHub Actions runs 36425263045 and
+#   36431187367, identical package versions, different Azure regions). These two values are
+#   therefore numerically stable within the declared tolerance and are reported to two
+#   decimals; they are not claimed to be bit-for-bit deterministic across CPUs.
+# Runtime columns (elapsed_seconds*) are never compared.
 RTOL: float = 1e-12
 ATOL: float = 1e-12
-KEY_COLUMNS: tuple[str, ...] = ("model", "fold")
+SCORE_TOLERANT_MODELS: frozenset[str] = frozenset({"Logistic-balanced"})
+SCORE_METRICS: frozenset[str] = frozenset(
+    {"roc_auc", "pr_auc", "roc_auc_mean", "roc_auc_std", "pr_auc_mean", "pr_auc_std"}
+)
+SCORE_RTOL: float = 0.0
+SCORE_ATOL: float = 1e-3
+
+
+def tolerance_for(model: str | None, column: str) -> tuple[float, float]:
+    """(rtol, atol) for one floating-point cell under the declared policy."""
+    if model in SCORE_TOLERANT_MODELS and column in SCORE_METRICS:
+        return SCORE_RTOL, SCORE_ATOL
+    return RTOL, ATOL
 
 
 @dataclass(frozen=True)
@@ -36,6 +66,7 @@ class Difference:
     expected: Any
     produced: Any
     abs_diff: float | None = None
+    tolerance: str | None = None
 
     def __str__(self) -> str:
         text = (
@@ -44,6 +75,8 @@ class Difference:
         )
         if self.abs_diff is not None:
             text += f" | abs_diff={self.abs_diff:.3e}"
+        if self.tolerance is not None:
+            text += f" | tolerance={self.tolerance}"
         return text
 
 
@@ -62,11 +95,8 @@ def compare_tables(
     expected: pd.DataFrame,
     produced: pd.DataFrame,
     name: str,
-    *,
-    rtol: float = RTOL,
-    atol: float = ATOL,
 ) -> list[Difference]:
-    """Exact comparison of text/integer columns; ``isclose`` for floating-point columns."""
+    """Exact comparison of text/integer columns; tolerance policy for floating-point columns."""
     if list(expected.columns) != list(produced.columns):
         missing = [c for c in expected.columns if c not in produced.columns]
         extra = [c for c in produced.columns if c not in expected.columns]
@@ -116,16 +146,21 @@ def compare_tables(
         if exp_float:
             a = exp_col.to_numpy(dtype=float)
             b = pro_col.to_numpy(dtype=float)
-            ok = np.isclose(b, a, rtol=rtol, atol=atol, equal_nan=True)
-            for i in np.flatnonzero(~ok):
+            models = expected["model"].tolist() if "model" in expected.columns else [None] * len(a)
+            for i in range(len(a)):
+                rtol, atol = tolerance_for(models[i], column)
+                both_nan = np.isnan(a[i]) and np.isnan(b[i])
+                if both_nan or abs(b[i] - a[i]) <= atol + rtol * abs(a[i]):
+                    continue
                 differences.append(
                     Difference(
                         name,
-                        _row_label(expected.iloc[i], keys, int(i)),
+                        _row_label(expected.iloc[i], keys, i),
                         column,
                         float(a[i]),
                         float(b[i]),
                         float(abs(a[i] - b[i])),
+                        f"rtol={rtol:g}, atol={atol:g}",
                     )
                 )
         else:

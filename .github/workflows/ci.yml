@@ -14,6 +14,16 @@ concurrency:
   group: taiwan-soft-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Single-threaded numerical libraries and a fixed hash seed remove thread-count and hashing
+# variation. OPENBLAS_CORETYPE is deliberately not forced; the CPU and BLAS configuration are
+# recorded in artifacts/environment.json instead.
+env:
+  PYTHONHASHSEED: "42"
+  OPENBLAS_NUM_THREADS: "1"
+  OMP_NUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  NUMEXPR_NUM_THREADS: "1"
+
 jobs:
   validate:
     runs-on: ubuntu-24.04
@@ -57,6 +67,10 @@ jobs:
       - name: Verify canonical results are reproduced
         run: python scripts/verify_reproducibility.py
 
+      - name: Diagnose baseline determinism (three repeats on this runner)
+        if: always()
+        run: python scripts/diagnose_baseline_determinism.py --repeats 3
+
       - name: Upload reproducibility evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -75,3 +89,4 @@ jobs:
             artifacts/soft_classifier_fold_results.csv
             artifacts/soft_classifier_summary.csv
             artifacts/soft_classifier_protocol.json
+            artifacts/baseline_determinism.json

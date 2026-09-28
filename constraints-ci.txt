@@ -6,3 +6,6 @@ pandas==3.0.6
 scipy==1.18.1
 scikit-learn==1.9.1
 joblib==1.6.0
+# threadpoolctl reports the BLAS/OpenMP thread pools in artifacts/environment.json; version as
+# installed (as a scikit-learn dependency) in runs 36422198527 and 36425263045.
+threadpoolctl==3.7.0
