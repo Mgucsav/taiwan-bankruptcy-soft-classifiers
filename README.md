@@ -96,6 +96,35 @@ python scripts/run_baselines.py        # -> artifacts/baseline_*.{csv,json}
 python scripts/run_soft_experiments.py # -> artifacts/soft_classifier_*.{csv,json}
 ```
 
+### Pilot results
+
+Five-fold stratified cross-validation on the 6819 firms (220 bankrupt); fold mean ± sample
+standard deviation. Metrics refer to the bankrupt class. Fixed parameters, no tuning.
+
+Implemented and evaluated: 4 classical baselines and 3 of the 5 planned soft classifiers
+(FPFS-kNN, IFPIFS-HC, PFS-kNN). FPFS-AC and IFPIFSC are not implemented yet.
+
+| Model | Balanced accuracy | Precision | Recall | F1 | MCC | ROC-AUC | PR-AUC |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Dummy-prior | 0.500 ± 0.000 | 0.000 ± 0.000 | 0.000 ± 0.000 | 0.000 ± 0.000 | 0.000 ± 0.000 | 0.500 ± 0.000 | 0.032 ± 0.000 |
+| Logistic regression (class-weighted) | 0.836 ± 0.029 | 0.174 ± 0.012 | 0.800 ± 0.069 | 0.285 ± 0.016 | 0.334 ± 0.022 | 0.89 ± 0.04ᵃ | 0.35 ± 0.07ᵃ |
+| RBF-SVM (class-weighted) | 0.787 ± 0.039 | 0.185 ± 0.006 | 0.673 ± 0.090 | 0.290 ± 0.012 | 0.315 ± 0.026 | 0.914 ± 0.016 | 0.327 ± 0.036 |
+| Random forest (class-weighted) | 0.571 ± 0.030 | 0.611 ± 0.110 | 0.145 ± 0.061 | 0.227 ± 0.070 | 0.281 ± 0.052 | 0.942 ± 0.020 | 0.430 ± 0.046 |
+| FPFS-kNN (k=3, Pearson) | 0.605 ± 0.020 | 0.449 ± 0.098 | 0.218 ± 0.038 | 0.293 ± 0.055 | 0.297 ± 0.063 | – | – |
+| IFPIFS-HC (λ₁=5, λ₂=0.5) | 0.615 ± 0.030 | 0.346 ± 0.081 | 0.245 ± 0.059 | 0.286 ± 0.064 | 0.271 ± 0.067 | – | – |
+| PFS-kNN (k=3, λ=0.5, p=5)ᵇ | 0.550 ± 0.010 | 0.424 ± 0.071 | 0.105 ± 0.020 | 0.167 ± 0.029 | 0.198 ± 0.032 | – | – |
+
+ᵃ Reported to two decimals; reproducible within an absolute tolerance of 1e-3 across CI runners.
+ᵇ Majority vote of Algorithm 1 in the paper. With the public MATLAB decision line
+`C(mode(NN(1:k)))` the results would be balanced accuracy 0.588, precision 0.177, recall 0.209,
+F1 0.191 and MCC 0.163 (see `reports/INDEPENDENT_REAL_DATA_CHECK.md`).
+Soft classifiers output labels, not scores, so no ROC-AUC or PR-AUC is reported for them.
+
+In this pilot the soft classifiers detect 10-25 % of the bankrupt firms at moderate precision.
+Class-weighted logistic regression detects 80 % but with many false alarms. These are
+descriptive results from one dataset and five folds, not evidence that any method is
+statistically superior.
+
 Reference pilot outputs are stored in `reports/pilot_results/`, with a narrative summary in
 `reports/INDEPENDENT_VALIDATION_REPORT.md`. These are exploratory results from one dataset and
 five folds. They do not establish that any method is statistically superior, and they are not
