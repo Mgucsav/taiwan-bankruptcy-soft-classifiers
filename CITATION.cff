@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Corporate Bankruptcy Prediction via Generalized Soft Matrix-Based Classification Algorithms on Taiwan Stock Exchange Data"
+type: software
+version: 0.1.0
+license: MIT
+repository-code: "https://github.com/Mgucsav/taiwan-bankruptcy-soft-classifiers"
+authors:
+  - family-names: "Güçsav"
+    given-names: "Mert"
+references:
+  - type: dataset
+    title: "Taiwanese Bankruptcy Prediction"
+    doi: "10.24432/C5004D"
+    url: "https://archive.ics.uci.edu/dataset/572/taiwanese+bankruptcy+prediction"
+    license: CC-BY-4.0
+    authors:
+      - name: "UCI Machine Learning Repository"

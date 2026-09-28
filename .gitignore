@@ -1,0 +1,35 @@
+# Environments and caches
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+*.egg-info/
+build/
+dist/
+.coverage
+coverage.xml
+htmlcov/
+
+# Secrets
+.env
+.env.*
+
+# Data: raw ZIP/CSV and processed CSV are never tracked (re-created by scripts/)
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Artifacts: only small, reproducible outputs are tracked
+artifacts/*
+!artifacts/.gitkeep
+!artifacts/data_quality.json
+!artifacts/data_profile.csv
+!artifacts/fold_assignments.csv
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
