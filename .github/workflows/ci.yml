@@ -1,0 +1,70 @@
+name: Linux validation and pilot experiments
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: taiwan-soft-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+          python -m pip check
+
+      - name: Download and validate UCI data
+        run: |
+          python scripts/download_data.py
+          python scripts/prepare_data.py
+
+      - name: Run tests and formatting gates
+        run: |
+          python -m pytest -q
+          python -m ruff check .
+          python -m ruff format --check .
+
+      - name: Run fixed-protocol pilot experiments
+        run: |
+          python scripts/run_baselines.py
+          python scripts/run_soft_experiments.py
+
+      - name: Upload reproducibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: taiwan-bankruptcy-pilot-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            artifacts/data_quality.json
+            artifacts/data_profile.csv
+            artifacts/fold_assignments.csv
+            artifacts/baseline_fold_results.csv
+            artifacts/baseline_summary.csv
+            artifacts/baseline_protocol.json
+            artifacts/soft_classifier_fold_results.csv
+            artifacts/soft_classifier_summary.csv
+            artifacts/soft_classifier_protocol.json

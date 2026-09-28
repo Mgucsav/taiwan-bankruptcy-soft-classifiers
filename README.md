@@ -48,17 +48,60 @@ missing values. The expected duplicates are `Current Liability to Liability`
 (= `Current Liabilities/Liability`) and `Current Liability to Equity`
 (= `Current Liabilities/Equity`).
 
-## 4. Planned classifiers
+## 4. Classifiers and pilot experiments
 
-Not implemented yet; each will be implemented in Python in a separate task.
+A fixed-parameter pilot compares the following methods on the UCI data (6819 firms, of which
+220 — about 3.23 % — are bankrupt):
 
-| Classifier | Reference |
-|---|---|
-| FPFS-kNN | Memiş, Enginoğlu & Erkan (2022), *Neurocomputing* |
-| FPFS-AC | Memiş, Enginoğlu & Erkan (2022), *Turk. J. Elec. Eng. & Comp. Sci.* |
-| IFPIFS-HC | Memiş, Arslan, Aydın, Enginoğlu & Camcı (2021), *J. New Results Sci.* |
-| IFPIFSC | Memiş, Arslan, Aydın, Enginoğlu & Camcı (2023), *Axioms* |
-| PFS-kNN | Memiş (2023), *Electronics* |
+| Group | Method | Implementation |
+|---|---|---|
+| Reference | Dummy prior | `baselines.py` |
+| Classical | Class-weighted logistic regression | `baselines.py` (standardised in-fold) |
+| Classical | Class-weighted RBF-SVM | `baselines.py` (standardised in-fold) |
+| Classical | Class-weighted random forest | `baselines.py` |
+| Soft | FPFS-kNN (k = 3, Pearson weights) | `soft_classifiers.py` |
+| Soft | IFPIFS-HC (λ₁ = 5, λ₂ = 0.5) | `soft_classifiers.py` |
+| Soft | PFS-kNN (k = 3, λ = 0.5, p = 5) | `soft_classifiers.py` |
+
+Protocol:
+
+- All methods use the same fixed five-fold stratified cross-validation
+  (`artifacts/fold_assignments.csv`).
+- Scaling and every other data transformation are fitted on the training folds only. The
+  classical models standardise inside an sklearn `Pipeline`. The soft methods learn min-max
+  ranges on the training folds and clip held-out values to [0, 1].
+- The soft methods are **leakage-controlled Python adaptations** of the transformations and
+  decision rules in the authors' published MATLAB code. The public MATLAB demos normalise
+  training and test data together; this step is deliberately not reproduced. The ports are
+  **not** presented as bit-for-bit equivalent to the MATLAB programs.
+- Hyperparameters are fixed in advance (source-demo defaults for the soft methods, library
+  defaults for the classical ones). No hyperparameter search is performed.
+- Primary metrics: balanced accuracy, precision, recall, F1 and MCC for the bankrupt class.
+  ROC-AUC and PR-AUC are also reported for the methods that produce scores (the classical
+  baselines).
+
+```bash
+python scripts/run_baselines.py        # -> artifacts/baseline_*.{csv,json}
+python scripts/run_soft_experiments.py # -> artifacts/soft_classifier_*.{csv,json}
+```
+
+Reference pilot outputs are stored in `reports/pilot_results/`, with a narrative summary in
+`reports/INDEPENDENT_VALIDATION_REPORT.md`. These are exploratory results from one dataset and
+five folds. They do not establish that any method is statistically superior, and they are not
+optimised or final estimates.
+
+FPFS-AC (Memiş, Enginoğlu & Erkan, 2022) and IFPIFSC (Memiş et al., 2023) have not been
+implemented yet.
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every push to `main` on Linux with Python 3.12. It:
+
+1. Installs the project.
+2. Downloads the official UCI data.
+3. Runs the data preparation, the tests, `ruff check` and `ruff format --check`.
+4. Runs both experiment scripts.
+5. Uploads the data-quality and result files as a workflow artefact.
 
 ## 5. Class imbalance warning
 
@@ -100,14 +143,20 @@ taiwan-bankruptcy-soft-classifiers/
 │   ├── data_quality.json
 │   ├── data_profile.csv
 │   └── fold_assignments.csv
+├── .github/workflows/ci.yml    # Linux/Python 3.12: data, tests, lint, experiments
+├── reports/                    # validation report and reference pilot results
 ├── scripts/
 │   ├── download_data.py
-│   └── prepare_data.py
+│   ├── prepare_data.py
+│   ├── run_baselines.py
+│   └── run_soft_experiments.py
 ├── src/taiwan_soft_classifiers/
 │   ├── config.py               # paths, RANDOM_STATE = 42, data contracts
 │   ├── data.py                 # download, safe extraction, loading, cleaning, profiling
 │   ├── validation.py           # contract checks (raise DataValidationError)
-│   └── splitting.py            # fixed stratified folds
+│   ├── splitting.py            # fixed stratified folds
+│   ├── baselines.py            # classical baselines
+│   └── soft_classifiers.py     # FPFS-kNN, IFPIFS-HC, PFS-kNN
 └── tests/
 ```
 
@@ -175,14 +224,12 @@ cases are produced by perturbing copies of the real data.
 ## 12. Current project status
 
 - [x] Project infrastructure, data download, validation, cleaning, fixed folds, tests
-- [ ] FPFS-kNN
+- [x] Classical baselines (Dummy prior, logistic regression, RBF-SVM, random forest)
+- [x] FPFS-kNN, IFPIFS-HC, PFS-kNN — leakage-controlled Python adaptations, fixed-parameter pilot
+- [ ] Numerical cross-check of the soft ports against MATLAB
 - [ ] FPFS-AC
-- [ ] IFPIFS-HC
 - [ ] IFPIFSC
-- [ ] PFS-kNN
-- [ ] Experiments and reporting
-
-No classifier has been implemented and no model results exist yet.
+- [ ] Final experiments and reporting
 
 ## 13. Reproducibility
 

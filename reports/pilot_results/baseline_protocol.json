@@ -1,0 +1,14 @@
+{
+  "status": "exploratory_pre_tuning_baselines",
+  "folds": 5,
+  "random_state": 42,
+  "selection_rule": "Models and default/fixed parameters specified before results",
+  "leakage_control": "Scaling fitted inside each training fold via sklearn Pipeline",
+  "primary_metrics": [
+    "pr_auc",
+    "mcc",
+    "balanced_accuracy",
+    "recall_positive"
+  ],
+  "warning": "No hyperparameter tuning; do not call these optimized models"
+}
