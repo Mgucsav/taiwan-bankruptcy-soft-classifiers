@@ -35,6 +35,9 @@ jobs:
           python -m pip install -e ".[dev]"
           python -m pip check
 
+      - name: Record environment
+        run: python scripts/write_environment.py
+
       - name: Download and validate UCI data
         run: |
           python scripts/download_data.py
@@ -59,6 +62,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
           path: |
+            artifacts/environment.json
             artifacts/data_quality.json
             artifacts/data_profile.csv
             artifacts/fold_assignments.csv

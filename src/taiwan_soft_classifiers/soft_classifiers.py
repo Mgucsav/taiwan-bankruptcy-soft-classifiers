@@ -1,10 +1,21 @@
-"""Leakage-controlled Python ports of selected Samet Memiş MATLAB classifiers.
+"""Leakage-controlled Python implementations of three Samet Memiş soft classifiers.
 
-The algebra and default hyperparameters follow the authors' public MATLAB files. The one
-intentional protocol correction is min-max fitting: the public demos normalise concatenated
-training and test data, while these estimators fit ranges on training data only and clip held-out
-values to [0, 1]. This prevents test-fold information from entering model fitting and preserves
-the membership-value domain.
+- FPFS-kNN and IFPIFS-HC are leakage-controlled Python adaptations of the transformations and
+  decision rules in the authors' public MATLAB files (FPFS-kNN @ 776f69c, IFPIFS-HC @ a9d3093).
+- PFS-kNN is a paper-concordant Python implementation (Memiş, 2023, Electronics 12(19), 4129,
+  Algorithm 1) with a documented public-code decision-line discrepancy: ``PFSkNN.m`` @ 9e04b32
+  line 65 computes ``C(mode(NN(1:k)))``, the mode of the neighbours' row *indices* (all distinct,
+  so the smallest index wins), whereas Algorithm 1, line 10 takes the most repetitive class
+  *label* among the k nearest neighbours. This module follows the paper.
+
+Intentional protocol correction for all three: the public code (and Definitions 33-34 of the
+PFS-kNN paper) min-max normalise training and test data together. Here ranges are fitted on the
+training data only and held-out values are clipped to [0, 1], so no test-fold information enters
+model fitting. Constant training columns map to 1, as in MATLAB ``normalise``.
+
+Tie rules (deterministic): equal distances are resolved in favour of the lower training-row index
+(MATLAB ``sort``/``min``/``max`` are stable); equal vote counts are resolved in favour of the
+smallest class label (MATLAB ``mode``). None of this is a bit-for-bit MATLAB equivalence claim.
 """
 
 from __future__ import annotations
@@ -31,22 +42,28 @@ def _as_1d_labels(y: np.ndarray, expected_rows: int) -> np.ndarray:
     return labels
 
 
-def _absolute_pearson_weights(x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    """Absolute Pearson correlations, matching MATLAB corr(...,'Rows','complete')."""
+def _absolute_pearson_or_nan(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """Absolute Pearson correlation per column; NaN where it is undefined (constant column).
+
+    Mirrors MATLAB ``abs(corr(x, y, 'Type', 'Pearson', 'Rows', 'complete'))``. Labels must be
+    numeric, as in the MATLAB code; for two classes |r| does not depend on the label coding.
+    """
 
     x_centered = x - x.mean(axis=0, keepdims=True)
     y_float = y.astype(float)
     y_centered = y_float - y_float.mean()
     numerator = x_centered.T @ y_centered
     denominator = np.sqrt(np.sum(x_centered**2, axis=0) * np.sum(y_centered**2))
-    with np.errstate(divide="ignore", invalid="ignore"):
-        correlations = np.divide(
-            numerator,
-            denominator,
-            out=np.zeros_like(numerator, dtype=float),
-            where=denominator != 0,
-        )
+    defined = (np.ptp(x, axis=0) != 0) & (denominator != 0)
+    correlations = np.full(numerator.shape, np.nan)
+    correlations[defined] = numerator[defined] / denominator[defined]
     return np.abs(correlations)
+
+
+def _absolute_pearson_weights(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """FPFS-kNN weights: |Pearson r| with undefined values set to 0 (``fw(isnan(fw))=0``)."""
+
+    return np.nan_to_num(_absolute_pearson_or_nan(x, y), nan=0.0)
 
 
 @dataclass
@@ -67,7 +84,7 @@ class _TrainingMinMax:
 
 
 class _BaseSoftClassifier:
-    """Minimal estimator interface shared by the source-faithful ports."""
+    """Minimal estimator interface shared by the three soft classifiers."""
 
     source_name: str
 
@@ -101,7 +118,11 @@ class _BaseSoftClassifier:
 
 
 class FPFSKNNClassifier(_BaseSoftClassifier):
-    """FPFS-kNN port using the five metrics in the official ``FPFSkNN.m`` file."""
+    """Leakage-controlled adaptation of ``FPFSkNN.m`` (five metrics, per-class k-mean, vote).
+
+    ``k`` is capped at the size of each training class, as the MATLAB code averages over all
+    available rows when a class has fewer than ``k``.
+    """
 
     source_name = "FPFS-kNN"
 
@@ -162,7 +183,11 @@ class FPFSKNNClassifier(_BaseSoftClassifier):
 
 
 class IFPIFSHCClassifier(_BaseSoftClassifier):
-    """IFPIFS-HC port following the official ``IFPIFSHC.m`` implementation."""
+    """Leakage-controlled adaptation of ``IFPIFSHC.m`` (Hamming pseudo-similarity, 1-NN).
+
+    The MATLAB similarity is ``1 - d / (2n)`` with ``d`` the L1 distance between the weighted
+    (mu, nu, pi) embeddings; the nearest training row by ``d`` is therefore the most similar one.
+    """
 
     source_name = "IFPIFS-HC"
 
@@ -190,29 +215,48 @@ class IFPIFSHCClassifier(_BaseSoftClassifier):
 
     def fit(self, x: np.ndarray, y: np.ndarray) -> IFPIFSHCClassifier:
         x_raw, y_array = self._fit_common(x, y)
-        correlation = _absolute_pearson_weights(x_raw, y_array)
-        self.mu_weight_ = 1.0 - (1.0 - correlation) ** self.lambda1
-        self.nu_weight_ = (1.0 - correlation) ** (self.lambda1 * (self.lambda1 + 1.0))
+        correlation = _absolute_pearson_or_nan(x_raw, y_array)
+        # As in IFPIFSHC.m: ifwP(isnan(ifwP))=0 sets both mu and nu weights of an undefined
+        # correlation to 0, so its pi weight is 1.
+        self.mu_weight_ = np.nan_to_num(1.0 - (1.0 - correlation) ** self.lambda1, nan=0.0)
+        self.nu_weight_ = np.nan_to_num(
+            (1.0 - correlation) ** (self.lambda1 * (self.lambda1 + 1.0)), nan=0.0
+        )
         self.pi_weight_ = 1.0 - self.mu_weight_ - self.nu_weight_
         self.embedded_train_ = self._embed(self.x_train_scaled_)
         return self
 
-    def predict(self, x: np.ndarray) -> np.ndarray:
+    def training_distances(self, x: np.ndarray) -> np.ndarray:
+        """L1 distances between weighted embeddings (test rows x training rows)."""
+        return cdist(self._embed(self._transform_test(x)), self.embedded_train_, "cityblock")
+
+    def nearest_training_index(self, x: np.ndarray) -> np.ndarray:
+        """Index of the most similar training row; ties go to the lower index."""
         embedded = self._embed(self._transform_test(x))
-        predictions: list[np.ndarray] = []
+        nearest: list[np.ndarray] = []
         for start in range(0, embedded.shape[0], self.chunk_size):
             distance = cdist(
                 embedded[start : start + self.chunk_size],
                 self.embedded_train_,
                 metric="cityblock",
             )
-            nearest = distance.argmin(axis=1)
-            predictions.append(self.y_train_[nearest])
-        return np.concatenate(predictions)
+            nearest.append(distance.argmin(axis=1))
+        return np.concatenate(nearest)
+
+    def predict(self, x: np.ndarray) -> np.ndarray:
+        nearest = self.nearest_training_index(x)
+        return self.y_train_[nearest]
 
 
 class PFSKNNClassifier(_BaseSoftClassifier):
-    """PFS-kNN port following the official ``PFSkNN.m`` Minkowski formulation."""
+    """Paper-concordant PFS-kNN (Memiş, 2023, Algorithm 1) with majority voting over labels.
+
+    Distances follow Proposition 7, ``d = ((1/3) * sum(|dmu|^p + |deta|^p + |dnu|^p +
+    |dpi|^p))^(1/p)``, as in ``pfsMd`` of ``PFSkNN.m``. Neighbours are ranked by the unscaled
+    Minkowski distance, which orders rows identically (monotone transform). The predicted class
+    is the most repetitive class label among the k nearest neighbours (Algorithm 1, line 10),
+    not the MATLAB line ``C(mode(NN(1:k)))``; see the module docstring.
+    """
 
     source_name = "PFS-kNN"
 
@@ -243,11 +287,21 @@ class PFSKNNClassifier(_BaseSoftClassifier):
         self.embedded_train_ = self._embed(self.x_train_scaled_)
         return self
 
-    def predict(self, x: np.ndarray) -> np.ndarray:
+    def pfs_distances(self, x: np.ndarray) -> np.ndarray:
+        """Proposition 7 distances (test rows x training rows), including the 1/3 scale."""
         embedded = self._embed(self._transform_test(x))
-        predictions: list[np.ndarray] = []
+        unscaled = cdist(embedded, self.embedded_train_, metric="minkowski", p=self.p)
+        return unscaled / 3.0 ** (1.0 / self.p)
+
+    def kneighbors(self, x: np.ndarray) -> np.ndarray:
+        """Indices of the k nearest training rows, nearest first.
+
+        ``k`` is capped at the number of training rows. A stable sort resolves equal distances
+        in favour of the lower training-row index, like MATLAB ``sort``.
+        """
+        embedded = self._embed(self._transform_test(x))
         effective_k = min(self.k, self.embedded_train_.shape[0])
-        encoded_train = np.searchsorted(self.classes_, self.y_train_)
+        neighbours: list[np.ndarray] = []
         for start in range(0, embedded.shape[0], self.chunk_size):
             distance = cdist(
                 embedded[start : start + self.chunk_size],
@@ -255,12 +309,17 @@ class PFSKNNClassifier(_BaseSoftClassifier):
                 metric="minkowski",
                 p=self.p,
             )
-            nearest = np.argpartition(distance, effective_k - 1, axis=1)[:, :effective_k]
-            encoded_neighbors = encoded_train[nearest]
-            winner_indices = np.apply_along_axis(
-                lambda row: np.bincount(row, minlength=self.classes_.size).argmax(),
-                1,
-                encoded_neighbors,
-            )
-            predictions.append(self.classes_[winner_indices])
-        return np.concatenate(predictions)
+            neighbours.append(np.argsort(distance, axis=1, kind="stable")[:, :effective_k])
+        return np.concatenate(neighbours)
+
+    def predict(self, x: np.ndarray) -> np.ndarray:
+        neighbours = self.kneighbors(x)
+        encoded_train = np.searchsorted(self.classes_, self.y_train_)
+        encoded_neighbours = encoded_train[neighbours]
+        # Most repetitive label; equal counts go to the smallest label (MATLAB ``mode``).
+        winner_indices = np.apply_along_axis(
+            lambda row: np.bincount(row, minlength=self.classes_.size).argmax(),
+            1,
+            encoded_neighbours,
+        )
+        return self.classes_[winner_indices]

@@ -1,4 +1,4 @@
-"""Evaluate selected official-code soft classifiers on the fixed five folds."""
+"""Evaluate the three soft classifiers with fixed, source-based parameters on the fixed folds."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from sklearn.metrics import (
 
 from taiwan_soft_classifiers import config
 from taiwan_soft_classifiers.data import load_clean_data, write_csv
+from taiwan_soft_classifiers.evaluation import confusion_counts
 from taiwan_soft_classifiers.soft_classifiers import (
     FPFSKNNClassifier,
     IFPIFSHCClassifier,
@@ -54,6 +55,7 @@ def main() -> None:
                     "n_test": int(y_test.size),
                     "positive_test": int(y_test.sum()),
                     "predicted_positive": int(prediction.sum()),
+                    **confusion_counts(y_test, prediction),
                     "balanced_accuracy": float(balanced_accuracy_score(y_test, prediction)),
                     "precision_positive": float(
                         precision_score(y_test, prediction, pos_label=1, zero_division=0)
@@ -87,11 +89,30 @@ def main() -> None:
     protocol_path.write_text(
         json.dumps(
             {
-                "status": "official_matlab_formula_port_pilot",
+                "status": "fixed_parameter_pilot",
                 "primary_protocol": "five fixed stratified folds",
+                "implementations": {
+                    "FPFS-kNN": (
+                        "leakage-controlled Python adaptation of the published transformations "
+                        "and decision rules (FPFSkNN.m @ 776f69c)"
+                    ),
+                    "IFPIFS-HC": (
+                        "leakage-controlled Python adaptation of the published transformations "
+                        "and decision rules (IFPIFSHC.m @ a9d3093)"
+                    ),
+                    "PFS-kNN": (
+                        "paper-concordant Python implementation with majority voting over "
+                        "neighbour class labels (Electronics 12(19):4129, Algorithm 1); "
+                        "documented public-code decision-line discrepancy: PFSkNN.m @ 9e04b32 "
+                        "line 65 uses C(mode(NN(1:k))), the mode of neighbour row indices"
+                    ),
+                },
                 "normalization": (
                     "training-fold min-max with held-out clipping to [0,1]; intentional "
                     "leakage-control correction to public MATLAB demos"
+                ),
+                "tie_breaking": (
+                    "equal distances: lower training-row index; equal votes: smallest label"
                 ),
                 "hyperparameters": {
                     "FPFS-kNN": {"k": 3, "correlation": "Pearson", "metrics": 5},
@@ -99,10 +120,11 @@ def main() -> None:
                     "PFS-kNN": {"k": 3, "lambda": 0.5, "p": 5},
                 },
                 "tuning": "none",
-                "warning": (
-                    "Python ports require numerical cross-check against MATLAB before claiming "
-                    "bit-level implementation equivalence"
+                "verification": (
+                    "independent formula fixtures in tests/test_soft_verification.py; "
+                    "no MATLAB run, so no bit-for-bit MATLAB equivalence is claimed"
                 ),
+                "scope": "descriptive results from one dataset and five folds",
             },
             indent=2,
         )

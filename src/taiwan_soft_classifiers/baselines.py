@@ -25,6 +25,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 
 from taiwan_soft_classifiers import config
+from taiwan_soft_classifiers.evaluation import confusion_counts
 from taiwan_soft_classifiers.splitting import validate_fold_assignments
 
 
@@ -132,6 +133,7 @@ def evaluate_baselines(
                     "n_test": int(y_test.shape[0]),
                     "positive_test": int(y_test.sum()),
                     "predicted_positive": int(prediction.sum()),
+                    **confusion_counts(y_test.to_numpy(), prediction),
                     "balanced_accuracy": float(balanced_accuracy_score(y_test, prediction)),
                     "precision_positive": float(
                         precision_score(y_test, prediction, pos_label=1, zero_division=0)

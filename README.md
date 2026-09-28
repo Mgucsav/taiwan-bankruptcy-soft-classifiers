@@ -70,15 +70,26 @@ Protocol:
 - Scaling and every other data transformation are fitted on the training folds only. The
   classical models standardise inside an sklearn `Pipeline`. The soft methods learn min-max
   ranges on the training folds and clip held-out values to [0, 1].
-- The soft methods are **leakage-controlled Python adaptations** of the transformations and
-  decision rules in the authors' published MATLAB code. The public MATLAB demos normalise
-  training and test data together; this step is deliberately not reproduced. The ports are
-  **not** presented as bit-for-bit equivalent to the MATLAB programs.
+- FPFS-kNN and IFPIFS-HC are **leakage-controlled Python adaptations** of the
+  transformations and decision rules in the authors' published MATLAB code.
+- PFS-kNN is a **paper-concordant Python implementation with a documented public-code
+  decision-line discrepancy**. It follows Algorithm 1 of Memiş (2023): majority vote over the
+  class labels of the k nearest neighbours. The public `PFSkNN.m` line
+  `C(mode(NN(1:k)))` takes the mode of the neighbours' row indices instead (see
+  `reports/INDEPENDENT_VALIDATION_REPORT.md`, Section 7).
+- The public MATLAB demos normalise training and test data together; this step is deliberately
+  not reproduced. None of the three implementations is presented as bit-for-bit equivalent to
+  the MATLAB programs. They are checked against independent formula fixtures
+  (`tests/test_soft_verification.py`), not against MATLAB outputs.
+- Equal distances resolve to the lower training-row index; equal votes resolve to the smallest
+  class label.
 - Hyperparameters are fixed in advance (source-demo defaults for the soft methods, library
   defaults for the classical ones). No hyperparameter search is performed.
 - Primary metrics: balanced accuracy, precision, recall, F1 and MCC for the bankrupt class.
-  ROC-AUC and PR-AUC are also reported for the methods that produce scores (the classical
-  baselines).
+  Every fold result also lists TP, TN, FP and FN. ROC-AUC and PR-AUC are reported only for
+  the methods that produce scores (the classical baselines).
+- Results are descriptive: a fixed-parameter pilot on one dataset with five folds. They do not
+  establish statistical superiority of any method.
 
 ```bash
 python scripts/run_baselines.py        # -> artifacts/baseline_*.{csv,json}
@@ -97,7 +108,8 @@ implemented yet.
 
 `.github/workflows/ci.yml` runs on every push to `main` on Linux with Python 3.12. It:
 
-1. Installs the project.
+1. Installs the project and records the Python and package versions in
+   `artifacts/environment.json`.
 2. Downloads the official UCI data.
 3. Runs the data preparation, the tests, `ruff check` and `ruff format --check`.
 4. Runs both experiment scripts.
@@ -149,13 +161,15 @@ taiwan-bankruptcy-soft-classifiers/
 │   ├── download_data.py
 │   ├── prepare_data.py
 │   ├── run_baselines.py
-│   └── run_soft_experiments.py
+│   ├── run_soft_experiments.py
+│   └── write_environment.py    # -> artifacts/environment.json
 ├── src/taiwan_soft_classifiers/
 │   ├── config.py               # paths, RANDOM_STATE = 42, data contracts
 │   ├── data.py                 # download, safe extraction, loading, cleaning, profiling
 │   ├── validation.py           # contract checks (raise DataValidationError)
 │   ├── splitting.py            # fixed stratified folds
 │   ├── baselines.py            # classical baselines
+│   ├── evaluation.py           # confusion-matrix counts
 │   └── soft_classifiers.py     # FPFS-kNN, IFPIFS-HC, PFS-kNN
 └── tests/
 ```
@@ -225,8 +239,10 @@ cases are produced by perturbing copies of the real data.
 
 - [x] Project infrastructure, data download, validation, cleaning, fixed folds, tests
 - [x] Classical baselines (Dummy prior, logistic regression, RBF-SVM, random forest)
-- [x] FPFS-kNN, IFPIFS-HC, PFS-kNN — leakage-controlled Python adaptations, fixed-parameter pilot
-- [ ] Numerical cross-check of the soft ports against MATLAB
+- [x] FPFS-kNN and IFPIFS-HC (leakage-controlled Python adaptations) and PFS-kNN
+  (paper-concordant implementation); fixed-parameter pilot
+- [x] Independent formula fixtures, normalisation, parameter and tie-rule tests
+- [ ] Numerical cross-check against actual MATLAB runs
 - [ ] FPFS-AC
 - [ ] IFPIFSC
 - [ ] Final experiments and reporting

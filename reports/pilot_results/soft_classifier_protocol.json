@@ -1,7 +1,13 @@
 {
-  "status": "official_matlab_formula_port_pilot",
+  "status": "fixed_parameter_pilot",
   "primary_protocol": "five fixed stratified folds",
+  "implementations": {
+    "FPFS-kNN": "leakage-controlled Python adaptation of the published transformations and decision rules (FPFSkNN.m @ 776f69c)",
+    "IFPIFS-HC": "leakage-controlled Python adaptation of the published transformations and decision rules (IFPIFSHC.m @ a9d3093)",
+    "PFS-kNN": "paper-concordant Python implementation with majority voting over neighbour class labels (Electronics 12(19):4129, Algorithm 1); documented public-code decision-line discrepancy: PFSkNN.m @ 9e04b32 line 65 uses C(mode(NN(1:k))), the mode of neighbour row indices"
+  },
   "normalization": "training-fold min-max with held-out clipping to [0,1]; intentional leakage-control correction to public MATLAB demos",
+  "tie_breaking": "equal distances: lower training-row index; equal votes: smallest label",
   "hyperparameters": {
     "FPFS-kNN": {
       "k": 3,
@@ -19,5 +25,6 @@
     }
   },
   "tuning": "none",
-  "warning": "Python ports require numerical cross-check against MATLAB before claiming bit-level implementation equivalence"
+  "verification": "independent formula fixtures in tests/test_soft_verification.py; no MATLAB run, so no bit-for-bit MATLAB equivalence is claimed",
+  "scope": "descriptive results from one dataset and five folds"
 }
